@@ -8,66 +8,6 @@
 // g++ `pkg-config --cflags opencv` -o hello hello.cpp `pkg-config --libs opencv`
 using namespace cv;
 using namespace std;
-//crescimento de região
-
-	
-
-// void Traverse(int xs, int ys, cv::Mat &ids,cv::Mat &image, int blobID, cv::Point &leftTop, cv::Point &rightBottom) {
-//     std::stack<cv::Point> S;
-//     S.push(cv::Point(xs,ys));
-
-//     while (!S.empty()) {
-//         cv::Point u = S.top();
-//         S.pop();
-
-//         int x = u.x;
-//         int y = u.y;
-
-//         if (image.at<unsigned char>(y,x) == 0 || ids.at<unsigned char>(y,x) > 0)
-//             continue;
-
-//         ids.at<unsigned char>(y,x) = blobID;
-//         if (x < leftTop.x)
-//             leftTop.x = x;
-//         if (x > rightBottom.x)
-//             rightBottom.x = x;
-//         if (y < leftTop.y)
-//             leftTop.y = y;
-//         if (y > rightBottom.y)
-//             rightBottom.y = y;
-
-//         if (x > 0)
-//             S.push(cv::Point(x-1,y));
-//         if (x < ids.cols-1)
-//             S.push(cv::Point(x+1,y));
-//         if (y > 0)
-//             S.push(cv::Point(x,y-1));
-//         if (y < ids.rows-1)
-//             S.push(cv::Point(x,y+1));
-//     }
-
-
-// }
-
-// int FindBlobs(cv::Mat &image, std::vector<cv::Rect> &out, float minArea) {
-//     cv::Mat ids = cv::Mat::zeros(image.size(),CV_32FC1);
-//     cv::Mat thresholded;
-//     cv::cvtColor(image, thresholded, CV_RGB2GRAY);
-//     const int thresholdLevel = 50;
-//     cv::threshold(thresholded, thresholded, thresholdLevel, 255, CV_THRESH_BINARY);
-//     int blobId = 1;
-//     for (int x = 0;x<ids.cols;x++)
-//         for (int y=0;y<ids.rows;y++){
-//             if (thresholded.at<unsigned char>(y,x) > 0 && ids.at<unsigned char>(y,x) == 0) {
-//                 cv::Point leftTop(ids.cols-1, ids.rows-1), rightBottom(0,0);
-//                 Traverse(x,y,ids, thresholded,blobId++, leftTop, rightBottom);
-//                 cv::Rect r(leftTop, rightBottom);
-//                 if (r.area() > minArea)
-//                     out.push_back(r);
-//             }
-//         }
-//     return blobId;
-// }
 
 int  main()
 {
@@ -98,17 +38,34 @@ int  main()
 	
     accumulateWeighted(frame, acc, 1);
 
+    Mat element = getStructuringElement(MORPH_RECT, Size(3, 7), Point(1,3) ); 
+
+    while(1)
+    {
+        cap >> temp;
+        if ( temp.empty() ) break;
+
+        frame = temp(ROI);
+
+        Mat floatimg;
+        frame.convertTo(floatimg, CV_32FC3);
+        accumulateWeighted(frame, acc, 0.001);
+    }
+
+    cap.release();
+
+    VideoCapture cap2("OneStopMoveEnter2cor.mpg");//lê video
+
 	while(1)
 	{
-		cap >> temp;
+		cap2 >> temp;
 		if ( temp.empty() ) break;
 
 		frame = temp(ROI);
 
-		// cap.retrieve(frame); // video probably has 1 stream only
         Mat floatimg;
         frame.convertTo(floatimg, CV_32FC3);
-        accumulateWeighted(frame, acc, 0.001);
+        accumulateWeighted(frame, acc, 0.0001);
         Mat res;
         convertScaleAbs(acc, res, 1, 0);
 
@@ -118,12 +75,14 @@ int  main()
         vector<vector<Point> > contours;
         cv::Mat thresholded;
         cv::cvtColor(diff, thresholded, CV_RGB2GRAY);
+        morphologyEx(thresholded, thresholded, CV_MOP_CLOSE, element);
+        morphologyEx(thresholded, thresholded, CV_MOP_CLOSE, element);
         cv::threshold(thresholded, thresholded, 50, 255, CV_THRESH_BINARY);
         findContours(thresholded, contours, CV_RETR_EXTERNAL, CV_CHAIN_APPROX_SIMPLE);
 
         for (int i = 0; i < (int) contours.size(); i++) {
             Rect rect  = boundingRect(contours[i]);
-            if (rect.area() > 45)
+            if (rect.area() > 30)
         	   rectangle(frame, rect, Scalar(255, 0, 0));
         }
 
