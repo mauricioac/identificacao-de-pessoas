@@ -10,7 +10,6 @@
 #include <stack>
 #include <vector>
 
-// g++ `pkg-config --cflags opencv` -o hello hello.cpp `pkg-config --libs opencv`
 using namespace cv;
 using namespace std;
 
