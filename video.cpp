@@ -5,24 +5,40 @@
  */
 #include <iostream>
 #include <opencv2/core/core.hpp>
+#include <opencv2/core/utility.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
 #include <opencv2/highgui/highgui.hpp>
+#include <opencv2/video/tracking.hpp>
+#include <opencv2/video/background_segm.hpp>
+ #include <random>
 #include <stack>
 #include <vector>
 
 using namespace cv;
 using namespace std;
 
+class Objeto {
+public:
+  Point centro;
+  vector<Point> contorno;
+  Scalar cor;
+};
+
+int randomiza(int min,int max) { random_device rd; mt19937_64 gen(rd()); uniform_int_distribution<> dis(min, max); return dis(gen); }
+
 int  main()
 {
+    int cont_cor = 0;
 	int c;
-	VideoCapture cap("OneStopMoveEnter2cor.mpg");//lê video
+	VideoCapture cap("TownCentreXVID720x480.mpg");//lê video
 
 	if (!cap.isOpened())
 	{
         cout << "Erro ao ler o vídeo." << endl;
 		return 0;
 	}
+
+    // MultiTracker tracker("TLD");
 
 	/**
 	 * Corta a parte superior do quadro, para
@@ -31,12 +47,11 @@ int  main()
 	 */
 	Mat media_corrida, quadro, temp;
 	Rect ROI(0,10, 384, 278);
-	quadro = imread("fundo.png",CV_LOAD_IMAGE_COLOR);//lê plano de fundo inicial
-	quadro = quadro(ROI);
+	cap >> quadro;
 
 	media_corrida = Mat::zeros(quadro.size(), CV_32FC3);  // preenche com 0 (zero) a imagem do acumulador
 
-    accumulateWeighted(quadro, media_corrida, 1);//pega imagem de fundo e aplica como acumulado
+    // accumulateWeighted(quadro, media_corrida, 1);//pega imagem de fundo e aplica como acumulado
 
     //elemento estruturante com a matriz de 3X7
     Mat elemento = getStructuringElement(MORPH_RECT, Size(3, 7));
@@ -46,74 +61,114 @@ int  main()
      * encontrar um background melhor
      */
     cout << "Processando vídeo." << endl;
+    Ptr< BackgroundSubtractorMOG2> pMOG2 = createBackgroundSubtractorMOG2(500,60,true);
+    Mat fgMaskMOG2;
+
+    pMOG2->setBackgroundRatio(0.001);
+    Mat element = getStructuringElement(MORPH_RECT, Size(3, 7), Point(1,3) );
+
     while(1)
     {
-        cap >> temp;
-        if ( temp.empty() ) break;
+      cap >> quadro;
+      if ( quadro.empty() ) break;
 
-        quadro = temp(ROI);
-
-        accumulateWeighted(quadro, media_corrida, 0.001);//aplica média corrida
+      pMOG2->apply(quadro, fgMaskMOG2);//,-0.5);
     }
     cout << "Iniciando reconhecimento de pessoas." << endl;
 
     namedWindow("Video",0);//abre uma janela com o nome "Video"
-    namedWindow("Diferenca",0);
+    namedWindow("Bin",0);//abre uma janela com o nome "Video"
+    namedWindow("BinOrig",0);//abre uma janela com o nome "Video"
+    // namedWindow("Diferenca",0);
 
     cap.release();//fecha video
 
-    VideoCapture cap2("OneStopMoveEnter2cor.mpg");//lê video novamente
+    VideoCapture cap2("TownCentreXVID720x480.mpg");//lê video novamente
+
+  vector<Objeto> objetos;
 
 	while(1)
 	{
-		cap2 >> temp;//pega o quadro
-		if ( temp.empty() ) break;
+		cap2 >> quadro;//pega o quadro
+		if ( quadro.empty() ) break;
 
-		quadro = temp(ROI);//corta a informação contendo data e hora
+    Mat originalFrame = quadro.clone();
+    // blur(quadro, quadro, Size(10,10) );
+    pMOG2->apply(quadro, fgMaskMOG2);//,-0.5);
+    Mat binaryImg;
+    morphologyEx(fgMaskMOG2, binaryImg, CV_MOP_CLOSE, element);
+    threshold(binaryImg, binaryImg, 128, 255, CV_THRESH_BINARY);
+    Mat binOrig = binaryImg.clone();
 
-        accumulateWeighted(quadro, media_corrida, 0.0001);
-        Mat fundo;//plano de fundo
-        convertScaleAbs(media_corrida, fundo);
+    for (int i = 0; i < 5; i++)
+      morphologyEx(binaryImg, binaryImg, CV_MOP_DILATE, element);
 
-        Mat diff;
-        subtract(fundo, quadro, diff);//subtrai o plano de fundo do quadro atual
+    for (int i = 0; i < 2; i++)
+      morphologyEx(binaryImg, binaryImg, CV_MOP_ERODE, element);
 
-        vector<vector<Point> > contornos;
-        cv::Mat imagem_binaria;
-        cv::cvtColor(diff, imagem_binaria, CV_RGB2GRAY);//converte quadro para escala de cinza
+    for (int i = 0; i < 2; i++)
+      morphologyEx(binaryImg, binaryImg, CV_MOP_OPEN, element);
 
-        //Realiza duas operações de fechamento (dilatação+erosão)
-        morphologyEx(imagem_binaria, imagem_binaria, CV_MOP_CLOSE, elemento);
-        morphologyEx(imagem_binaria, imagem_binaria, CV_MOP_CLOSE, elemento);
+    Mat ContourImg = binaryImg.clone();
 
-        //Aplica um limiar, se a intensidade do pixel passar de 50 é branco
-        cv::threshold(imagem_binaria, imagem_binaria, 50, 255, CV_THRESH_BINARY);
-        Mat t = imagem_binaria.clone();//faz uma cópia para mostrar depois
+    vector< vector<Point> > contornos;
+    findContours(ContourImg, contornos, CV_RETR_EXTERNAL, CV_CHAIN_APPROX_NONE);
 
-        //Encontra contornos na imagem
-        //Internamente utiliza crescimento de regiões
-        //Retorna somente os retângulos mais externos
-        findContours(imagem_binaria, contornos, CV_RETR_EXTERNAL, CV_CHAIN_APPROX_SIMPLE);
+    for (int i = 0; i < (int) contornos.size(); i++)
+    {
+        Rect rect1  = boundingRect(contornos[i]);
 
-        for (int i = 0; i < (int) contornos.size(); i++)
+        if (rect1.height < 20 || rect1.width < 20)
         {
-            //pega o retângulo que engloba o contorno
-            Rect rect  = boundingRect(contornos[i]);
-
-            if (rect.area() > 30)
-            {
-        	   rectangle(quadro, rect, Scalar(255, 0, 0));
-            }
+          continue;
         }
 
-        imshow("Video",quadro);//exibe o video
-        imshow("Diferenca",t);//exibe diferença
+        bool achou = false;
+        Scalar cor;
+        Point centro(rect1.x + (rect1.width / 2), rect1.y + (rect1.height / 2));
 
-        //espera comando de saída "ESC"
-        if (waitKey(30) == 27)
-        {
-        	break;
+        for (Objeto o : objetos) {
+          double res = cv::norm(centro - o.centro);
+
+          if (res < 100) {
+            o.contorno = contornos[i];
+            o.centro = centro;
+            cor = o.cor;
+
+            achou = true;
+          }
         }
+
+        if (!achou) {
+          Objeto novo;
+          novo.centro = centro;
+          novo.contorno = contornos[i];
+          novo.cor = Scalar(randomiza(120, 200), randomiza(120,200), randomiza(120,200));
+
+          cor = novo.cor;
+
+          objetos.push_back(novo);
+        }
+
+        cout << objetos.size() << endl;
+
+        vector<Point> tmp = contornos[i];
+        const Point* pts[1] = { &tmp[0] };
+        int s = (int) contornos[i].size();
+
+        fillPoly(originalFrame, pts, &s, 1, cor);
+    }
+
+    imshow("Video",originalFrame);//exibe o video
+    imshow("Bin",binaryImg);//exibe o video
+    imshow("BinOrig",binOrig);//exibe o video
+    // imshow("Diferenca",t);//exibe diferença
+
+    //espera comando de saída "ESC"
+    if (waitKey(30) == 27)
+    {
+    	break;
+    }
 	}
 
 	return 0;
