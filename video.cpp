@@ -79,6 +79,7 @@ int  main()
     namedWindow("Video",0);//abre uma janela com o nome "Video"
     namedWindow("Bin",0);//abre uma janela com o nome "Video"
     namedWindow("BinOrig",0);//abre uma janela com o nome "Video"
+    namedWindow("BG",0);//abre uma janela com o nome "Video"
     // namedWindow("Diferenca",0);
 
     cap.release();//fecha video
@@ -127,19 +128,25 @@ int  main()
         Scalar cor;
         Point centro(rect1.x + (rect1.width / 2), rect1.y + (rect1.height / 2));
 
-        for (Objeto o : objetos) {
-          double res = cv::norm(centro - o.centro);
+        int menor_indice = -1;
+        double menor_distancia = 9999;
 
-          if (res < 100) {
-            o.contorno = contornos[i];
-            o.centro = centro;
-            cor = o.cor;
+        for (int j = 0; j < (int) objetos.size(); j++) {
+          double res = cv::norm(centro - objetos[j].centro);
+          // cout << res << endl;
 
+          if (res < 30 && res < menor_distancia) {
+            menor_distancia = res;
+            menor_indice = j;
             achou = true;
           }
         }
 
-        if (!achou) {
+        if (achou) {
+          objetos[menor_indice].contorno = contornos[i];
+          objetos[menor_indice].centro = centro;
+          cor = objetos[menor_indice].cor;
+        } else {
           Objeto novo;
           novo.centro = centro;
           novo.contorno = contornos[i];
@@ -150,7 +157,7 @@ int  main()
           objetos.push_back(novo);
         }
 
-        cout << objetos.size() << endl;
+        // cout << objetos.size() << endl;
 
         vector<Point> tmp = contornos[i];
         const Point* pts[1] = { &tmp[0] };
@@ -159,9 +166,15 @@ int  main()
         fillPoly(originalFrame, pts, &s, 1, cor);
     }
 
+    for (Objeto o : objetos) {
+      Rect r = boundingRect(o.contorno);
+      rectangle(originalFrame, r, Scalar(0,255,0));
+    }
+
     imshow("Video",originalFrame);//exibe o video
     imshow("Bin",binaryImg);//exibe o video
     imshow("BinOrig",binOrig);//exibe o video
+    imshow("BG",fgMaskMOG2);//exibe o video
     // imshow("Diferenca",t);//exibe diferença
 
     //espera comando de saída "ESC"
