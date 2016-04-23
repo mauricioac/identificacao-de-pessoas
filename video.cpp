@@ -115,11 +115,13 @@ int  main()
     vector< vector<Point> > contornos;
     findContours(ContourImg, contornos, CV_RETR_EXTERNAL, CV_CHAIN_APPROX_NONE);
 
+    vector<Objeto> obj_detectados;
+
     for (int i = 0; i < (int) contornos.size(); i++)
     {
         Rect rect1  = boundingRect(contornos[i]);
 
-        if (rect1.height < 20 || rect1.width < 20)
+        if ( (rect1.height == rect1.width)  ||  rect1.width > 150 || rect1.height < 70)
         {
           continue;
         }
@@ -146,6 +148,8 @@ int  main()
           objetos[menor_indice].contorno = contornos[i];
           objetos[menor_indice].centro = centro;
           cor = objetos[menor_indice].cor;
+
+          obj_detectados.push_back(objetos[menor_indice]);
         } else {
           Objeto novo;
           novo.centro = centro;
@@ -154,7 +158,7 @@ int  main()
 
           cor = novo.cor;
 
-          objetos.push_back(novo);
+          obj_detectados.push_back(novo);
         }
 
         // cout << objetos.size() << endl;
@@ -166,10 +170,12 @@ int  main()
         fillPoly(originalFrame, pts, &s, 1, cor);
     }
 
-    for (Objeto o : objetos) {
+    for (Objeto o : obj_detectados) {
       Rect r = boundingRect(o.contorno);
       rectangle(originalFrame, r, Scalar(0,255,0));
     }
+
+    objetos = obj_detectados;
 
     imshow("Video",originalFrame);//exibe o video
     imshow("Bin",binaryImg);//exibe o video
