@@ -13,6 +13,7 @@
  #include <random>
 #include <stack>
 #include <vector>
+#include <algorithm>
 
 using namespace cv;
 using namespace std;
@@ -21,8 +22,14 @@ class Objeto {
 public:
   Point centro;
   vector<Point> contorno;
+  Rect bb;
   Scalar cor;
 };
+
+float euclideanDist(Point& p, Point& q) {
+    Point diff = p - q;
+    return cv::sqrt(diff.x*diff.x + diff.y*diff.y);
+}
 
 int randomiza(int min,int max) { random_device rd; mt19937_64 gen(rd()); uniform_int_distribution<> dis(min, max); return dis(gen); }
 
@@ -77,9 +84,9 @@ int  main()
     cout << "Iniciando reconhecimento de pessoas." << endl;
 
     namedWindow("Video",0);//abre uma janela com o nome "Video"
-    namedWindow("Bin",0);//abre uma janela com o nome "Video"
-    namedWindow("BinOrig",0);//abre uma janela com o nome "Video"
-    namedWindow("BG",0);//abre uma janela com o nome "Video"
+    // namedWindow("Bin",0);//abre uma janela com o nome "Video"
+    // namedWindow("BinOrig",0);//abre uma janela com o nome "Video"
+    // namedWindow("BG",0);//abre uma janela com o nome "Video"
     // namedWindow("Diferenca",0);
 
     cap.release();//fecha video
@@ -120,81 +127,155 @@ int  main()
     vector< vector<Point> > contornos;
     findContours(ContourImg, contornos, CV_RETR_EXTERNAL, CV_CHAIN_APPROX_NONE);
 
-    vector<Objeto> obj_detectados;
+    // vector<Objeto> obj_detectados;
 
-    for (int i = 0; i < (int) contornos.size(); i++)
-    {
-        Rect rect1  = boundingRect(contornos[i]);
+    // for (int i = 0; i < (int) contornos.size(); i++)
+    // {
+    //     Rect rect1  = boundingRect(contornos[i]);
 
 
-        if ( rect1.height < 30  ||  rect1.width > 150   )
-        {
-          continue;
+    //     if ( rect1.height < 30  ||  rect1.width > 150   )
+    //     {
+    //       continue;
+    //     }
+    //     else if ( ( (float) rect1.height / (float) rect1.width ) < 1.5f)
+    //     {
+    //       continue;
+    //     }
+    //     else if ( rect1.area() < 100.0f)
+    //     {
+    //       continue;
+    //     }
+
+    //     bool achou = false;
+    //     Scalar cor;
+    //     Point centro(rect1.x + (rect1.width / 2), rect1.y + (rect1.height / 2));
+
+    //     int menor_indice = -1;
+    //     double menor_distancia = 9999;
+
+    //     for (int j = 0; j < (int) objetos.size(); j++) {
+    //       double res = cv::norm(centro - objetos[j].centro);
+    //       // cout << res << endl;
+
+    //       if (res < 30 && res < menor_distancia) {
+    //         menor_distancia = res;
+    //         menor_indice = j;
+    //         achou = true;
+    //       }
+    //     }
+
+    //     if (achou) {
+    //       objetos[menor_indice].contorno = contornos[i];
+    //       objetos[menor_indice].centro = centro;
+    //       cor = objetos[menor_indice].cor;
+
+    //       obj_detectados.push_back(objetos[menor_indice]);
+    //     } else {
+    //       Objeto novo;
+    //       novo.centro = centro;
+    //       novo.contorno = contornos[i];
+    //       novo.cor = Scalar(randomiza(120, 200), randomiza(120,200), randomiza(120,200));
+
+    //       cor = novo.cor;
+
+    //       obj_detectados.push_back(novo);
+    //     }
+
+    //     // cout << objetos.size() << endl;
+
+    //     vector<Point> tmp = contornos[i];
+    //     const Point* pts[1] = { &tmp[0] };
+    //     int s = (int) contornos[i].size();
+
+    //     fillPoly(originalFrame, pts, &s, 1, cor);
+    // }
+
+    vector<int> lixo;
+    vector<bool> contorno_utilizado = vector<bool> ((int) contornos.size(), false);
+    vector <Objeto> novos_objetos;
+
+    for (int w = 0; w < (int)objetos.size(); w++) {
+      int menor_indice = 999;
+      double menor_distancia = 9999;
+      bool achou = false;
+
+      for (int i = 0; i < (int)contornos.size(); i++) {
+
+        Rect bb = boundingRect(contornos[i]);
+        Point centro(bb.x + (bb.width / 2), bb.y + (bb.height / 2));
+
+        float res = euclideanDist(centro, objetos[w].centro);
+
+        bool alturaRadical = (objetos[w].bb.height - bb.height) > 100;
+        bool larguraRadical = (objetos[w].bb.width - bb.width) > 100;
+
+        // caso trivial
+        if (res < 30 && res < menor_distancia && !alturaRadical && !larguraRadical) {
+          menor_distancia = res;
+          menor_indice = i;
+          achou = true;
         }
-        else if ( ( (float) rect1.height / (float) rect1.width ) < 1.5f)
-        {
-          continue;
-        }
-        else if ( rect1.area() < 100.0f)
-        {
-          continue;
-        }
 
-        bool achou = false;
-        Scalar cor;
-        Point centro(rect1.x + (rect1.width / 2), rect1.y + (rect1.height / 2));
+      }
 
-        int menor_indice = -1;
-        double menor_distancia = 9999;
-
-        for (int j = 0; j < (int) objetos.size(); j++) {
-          double res = cv::norm(centro - objetos[j].centro);
-          // cout << res << endl;
-
-          if (res < 30 && res < menor_distancia) {
-            menor_distancia = res;
-            menor_indice = j;
-            achou = true;
-          }
-        }
-
-        if (achou) {
-          objetos[menor_indice].contorno = contornos[i];
-          objetos[menor_indice].centro = centro;
-          cor = objetos[menor_indice].cor;
-
-          obj_detectados.push_back(objetos[menor_indice]);
-        } else {
-          Objeto novo;
-          novo.centro = centro;
-          novo.contorno = contornos[i];
-          novo.cor = Scalar(randomiza(120, 200), randomiza(120,200), randomiza(120,200));
-
-          cor = novo.cor;
-
-          obj_detectados.push_back(novo);
-        }
-
-        // cout << objetos.size() << endl;
-
-        vector<Point> tmp = contornos[i];
-        const Point* pts[1] = { &tmp[0] };
-        int s = (int) contornos[i].size();
-
-        fillPoly(originalFrame, pts, &s, 1, cor);
+      if (achou) {
+        objetos[w].contorno = contornos[menor_indice];
+        objetos[w].bb = boundingRect(contornos[menor_indice]);
+        objetos[w].centro = Point(objetos[w].bb.x + (objetos[w].bb.width / 2), objetos[w].bb.y + (objetos[w].bb.height / 2));
+        contorno_utilizado[menor_indice] = true;
+        novos_objetos.push_back(objetos[w]);
+      }
+      else  contorno_utilizado[menor_indice] = false;
     }
 
-    for (Objeto o : obj_detectados) {
-      Rect r = boundingRect(o.contorno);
-      rectangle(originalFrame, r, Scalar(0,255,0));
+    for (int i = 0; i < (int) contornos.size(); i++) {
+      if (contorno_utilizado[i]) {
+        continue;
+      }
+
+      Rect rect1  = boundingRect(contornos[i]);
+
+
+      if ( rect1.height < 20  ||  rect1.width > 150   )
+      {
+        continue;
+      }
+      // else if ( ( (float) rect1.height / (float) rect1.width ) < 1.5f)
+      // {
+      //   continue;
+      // }
+      // else if ( rect1.area() < 100.0f)
+      // {
+      //   continue;
+      // }
+
+      Point centro(rect1.x + (rect1.width / 2), rect1.y + (rect1.height / 2));
+
+      Objeto novo;
+      novo.centro = centro;
+      novo.contorno = contornos[i];
+      novo.cor = Scalar(randomiza(120, 200), randomiza(120,200), randomiza(120,200));
+
+
+      novos_objetos.push_back(novo);
     }
 
-    objetos = obj_detectados;
+    objetos = novos_objetos;
+
+    for (Objeto o : objetos) {
+      vector<Point> tmp = o.contorno;
+      const Point* pts[1] = { &tmp[0] };
+      int s = (int) o.contorno.size();
+
+      fillPoly(originalFrame, pts, &s, 1, o.cor);
+      rectangle(originalFrame, o.bb, Scalar(255,0,0));
+    }
+
 
     imshow("Video",originalFrame);//exibe o video
-    imshow("Bin",binaryImg);//exibe o video
-    imshow("BinOrig",binOrig);//exibe o video
-    imshow("BG",fgMaskMOG2);//exibe o video
+    // imshow("Bin",binaryImg);//exibe o video
+    // imshow("BinOrig",binOrig);//exibe o video
     // imshow("Diferenca",t);//exibe diferença
 
     //espera comando de saída "ESC"
