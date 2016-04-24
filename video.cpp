@@ -119,15 +119,46 @@ int  main()
     for (int i = 0; i < 3; i++)
       morphologyEx(binaryImg, binaryImg, CV_MOP_ERODE, element);
 
-    for (int i = 0; i < 2; i++)
+    for (int i = 0; i < 20; i++)
       morphologyEx(binaryImg, binaryImg, CV_MOP_OPEN, element);
 
-    // blur(binaryImg, binaryImg, Size(10,10) );
+    blur(binaryImg, binaryImg, Size(10,10) );
     Mat ContourImg = binaryImg.clone();
 
 
+    vector< vector<Point> > _contornos;
     vector< vector<Point> > contornos;
-    findContours(ContourImg, contornos, CV_RETR_EXTERNAL, CV_CHAIN_APPROX_NONE);
+    findContours(ContourImg, _contornos, CV_RETR_EXTERNAL, CV_CHAIN_APPROX_NONE);
+
+    for (int i = 0; i < (int) _contornos.size(); i++) {
+      Rect bb = boundingRect(_contornos[i]);
+      Point centro(bb.x + (bb.width / 2), bb.y + (bb.height / 2));
+
+      int tamanho = 40;
+
+      if (centro.y > (binaryImg.size().height / 2)) {
+        tamanho = 60;
+      }
+
+      if (bb.width > tamanho) {
+        Mat img2 = binaryImg.clone();
+        img2 = Scalar(0,0,0);
+        drawContours(img2, vector<vector<Point> >(1,_contornos[i]), -1, Scalar(255,255,255), -1, 8);
+        Point p1(bb.x + (bb.width / 2), bb.y);
+        Point p2(bb.x + (bb.width / 2), bb.y + bb.height);
+        line(img2, p1, p2, Scalar(0,0,0), 2);
+
+        vector< vector<Point> > divididos;
+        findContours(img2, divididos, CV_RETR_EXTERNAL, CV_CHAIN_APPROX_NONE);
+
+        for (int k = 0; k < (int) divididos.size(); k++) {
+          contornos.push_back(divididos[k]);
+        }
+      } else {
+        contornos.push_back(_contornos[i]);
+      }
+    }
+
 
     vector<int> lixo;
     vector<bool> contorno_utilizado = vector<bool> ((int) contornos.size(), false);
@@ -161,9 +192,10 @@ int  main()
 
         int caso = 1;
 
-        if (larguraRadical) {
-          caso = 2;
-        }
+        // if (larguraRadical)
+        // {
+        //   caso = 2;
+        // }
 
         switch (caso) {
           case 1:
