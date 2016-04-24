@@ -94,23 +94,28 @@ int  main()
 		if ( quadro.empty() ) break;
 
     Mat originalFrame = quadro.clone();
-    // blur(quadro, quadro, Size(10,10) );
+
     pMOG2->apply(quadro, fgMaskMOG2);//,-0.5);
     Mat binaryImg;
     morphologyEx(fgMaskMOG2, binaryImg, CV_MOP_CLOSE, element);
     threshold(binaryImg, binaryImg, 128, 255, CV_THRESH_BINARY);
     Mat binOrig = binaryImg.clone();
 
+    for (int i = 0; i < 2; i++)
+      morphologyEx(binaryImg, binaryImg, CV_MOP_OPEN, element);
+
     for (int i = 0; i < 5; i++)
       morphologyEx(binaryImg, binaryImg, CV_MOP_DILATE, element);
 
-    for (int i = 0; i < 2; i++)
+    for (int i = 0; i < 3; i++)
       morphologyEx(binaryImg, binaryImg, CV_MOP_ERODE, element);
 
     for (int i = 0; i < 2; i++)
       morphologyEx(binaryImg, binaryImg, CV_MOP_OPEN, element);
 
+    blur(binaryImg, binaryImg, Size(10,10) );
     Mat ContourImg = binaryImg.clone();
+
 
     vector< vector<Point> > contornos;
     findContours(ContourImg, contornos, CV_RETR_EXTERNAL, CV_CHAIN_APPROX_NONE);
@@ -121,7 +126,16 @@ int  main()
     {
         Rect rect1  = boundingRect(contornos[i]);
 
-        if ( (rect1.height == rect1.width)  ||  rect1.width > 150 || rect1.height < 70)
+
+        if ( rect1.height < 30  ||  rect1.width > 150   )
+        {
+          continue;
+        }
+        else if ( ( (float) rect1.height / (float) rect1.width ) < 1.5f)
+        {
+          continue;
+        }
+        else if ( rect1.area() < 100.0f)
         {
           continue;
         }
