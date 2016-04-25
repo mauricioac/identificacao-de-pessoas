@@ -72,7 +72,7 @@ int  main()
 
   cout << "Iniciando reconhecimento de pessoas." << endl;
 
-  namedWindow("Video",0);//abre uma janela com o nome "Video"
+  namedWindow("Video",WINDOW_AUTOSIZE);//abre uma janela com o nome "Video"
   // namedWindow("Bin",0);//abre uma janela com o nome "Video"
   // namedWindow("BinOrig",0);//abre uma janela com o nome "Video"
   // namedWindow("BG",0);//abre uma janela com o nome "Video"
@@ -148,29 +148,47 @@ int  main()
       Point centro(bb.x + (bb.width / 2), bb.y + (bb.height / 2));
 
       int largura = 40;
-
-      if (centro.y < hframe) {
-        if (centro.x < wframe) {
-          largura = 35;
-        } else if (centro.x < wframe * 2) {
-          largura = 25;
-        } else {
-          largura = 35;
-        }
-      } else if (centro.y < hframe * 2) {
-        if (bb.width < 42 && bb.height < 70) {
+       
+      //superior
+      if (centro.y < hframe){
+        
+        if (bb.height < 35) {
           continue;
         }
 
         if (centro.x < wframe) {
-          largura = 50;
+          largura = 35;
         } else if (centro.x < wframe * 2) {
+         
+          largura = 25;
+        } else {
+          
+          largura = 35;
+        }
+      } 
+      //meio
+      else if (centro.y < hframe * 2) {
+        
+        if (bb.height < 55) 
+        {
+          continue;
+        }
+
+        if (centro.x < wframe) {
+          
+          largura = 40;
+        } else if (centro.x < wframe * 2) {
+          
           largura = 52;
         } else {
+          
           largura = 50;
         }
-      } else {
-        if (bb.width < 42 && bb.height < 70) {
+      }
+      //baixo 
+      else {
+        
+        if (bb.height < 35) {
           continue;
         }
 
@@ -192,8 +210,8 @@ int  main()
         Mat img2 = binaryImg.clone();
         img2 = Scalar(0,0,0);
         drawContours(img2, vector<vector<Point> >(1,_contornos[i]), -1, Scalar(255,255,255), -1, 8);
-        Point p1(bb.x + largura, bb.y);
-        Point p2(bb.x + largura, bb.y + bb.height);
+        Point p1(bb.x + (bb.width/2), bb.y);
+        Point p2(bb.x + (bb.width/2), bb.y + bb.height);
         line(img2, p1, p2, Scalar(0,0,0), 2);
 
         vector< vector<Point> > divididos;
@@ -217,9 +235,9 @@ int  main()
       Rect bb = boundingRect(_contornos[i]);
       Point centro(bb.x + (bb.width / 2), bb.y + (bb.height / 2));
 
-      int altura = 130;
+      int altura = 80;
 
-      if (bb.height > altura && (bb.height - altura) > (altura / 3.0f)) {
+      if (bb.height / altura > 2) {
         Mat img2 = binaryImg.clone();
         img2 = Scalar(0,0,0);
         drawContours(img2, vector<vector<Point> >(1,_contornos[i]), -1, Scalar(255,255,255), -1, 8);
@@ -290,15 +308,11 @@ int  main()
 
       Rect rect1  = boundingRect(contornos[i]);
 
-      if ( rect1.width < 8 || rect1.height < 20  ||  rect1.width > 150   )
+      if ( rect1.width < 15 || rect1.height < 20  ||  rect1.width > 150   )
       {
         continue;
       }
       else if ( ( (float) rect1.height / (float) rect1.width ) < 1.5f)
-      {
-        continue;
-      }
-      else if ( rect1.area() < 100.0f)
       {
         continue;
       }
@@ -323,7 +337,7 @@ int  main()
       int s = (int) o.contorno.size();
 
       fillPoly(originalFrame, pts, &s, 1, o.cor);
-      rectangle(originalFrame, o.bb, Scalar(255,0,0));
+      // rectangle(originalFrame, o.bb, Scalar(255,0,0));
     }
 
 
