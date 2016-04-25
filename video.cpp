@@ -20,7 +20,7 @@ using namespace std;
 
 class Objeto {
 public:
-  Point canto;
+  Point centro;
   vector<Point> contorno;
   Rect bb;
   Scalar cor;
@@ -130,22 +130,57 @@ int  main()
     vector< vector<Point> > contornos;
     findContours(ContourImg, _contornos, CV_RETR_EXTERNAL, CV_CHAIN_APPROX_NONE);
 
+    double hframe = binaryImg.size().height / 3.0f;
+    double wframe = binaryImg.size().width / 3.0f;
+
+    // corte de contornos por largura
+    // meio que corrigindo perspectiva
     for (int i = 0; i < (int) _contornos.size(); i++) {
       Rect bb = boundingRect(_contornos[i]);
       Point centro(bb.x + (bb.width / 2), bb.y + (bb.height / 2));
 
-      int tamanho = 40;
+      int largura = 40;
 
-      if (centro.y > (binaryImg.size().height / 2)) {
-        tamanho = 60;
+      if (centro.y < hframe) {
+        if (centro.x < wframe) {
+          largura = 35;
+        } else if (centro.x < wframe * 2) {
+          largura = 25;
+        } else {
+          largura = 35;
+        }
+      } else if (centro.y < hframe * 2) {
+        if (bb.width < 42 && bb.height < 70) {
+          continue;
+        }
+
+        if (centro.x < wframe) {
+          largura = 50;
+        } else if (centro.x < wframe * 2) {
+          largura = 52;
+        } else {
+          largura = 50;
+        }
+      } else {
+        if (bb.width < 42 && bb.height < 70) {
+          continue;
+        }
+
+        if (centro.x < wframe) {
+          largura = 42;
+        } else if (centro.x < wframe * 2) {
+          largura = 45;
+        } else {
+          largura = 55;
+        }
       }
 
-      if (bb.width > tamanho) {
+      if (bb.width > largura && (bb.width - largura) > (largura / 2.0f)) {
         Mat img2 = binaryImg.clone();
         img2 = Scalar(0,0,0);
         drawContours(img2, vector<vector<Point> >(1,_contornos[i]), -1, Scalar(255,255,255), -1, 8);
-        Point p1(bb.x + (bb.width / 2), bb.y);
-        Point p2(bb.x + (bb.width / 2), bb.y + bb.height);
+        Point p1(bb.x + largura, bb.y);
+        Point p2(bb.x + largura, bb.y + bb.height);
         line(img2, p1, p2, Scalar(0,0,0), 2);
 
         vector< vector<Point> > divididos;
@@ -155,6 +190,37 @@ int  main()
           contornos.push_back(divididos[k]);
         }
       } else {
+        contornos.push_back(_contornos[i]);
+      }
+    }
+
+    _contornos = contornos;
+    contornos.clear();
+
+    // corte de contornos por altura
+    // meio que corrigindo perspectiva
+    for (int i = 0; i < (int) _contornos.size(); i++) {
+      Rect bb = boundingRect(_contornos[i]);
+      Point centro(bb.x + (bb.width / 2), bb.y + (bb.height / 2));
+
+      int altura = 130;
+
+      if (bb.height > altura && (bb.height - altura) > (altura / 3.0f)) {
+        Mat img2 = binaryImg.clone();
+        img2 = Scalar(0,0,0);
+        drawContours(img2, vector<vector<Point> >(1,_contornos[i]), -1, Scalar(255,255,255), -1, 8);
+        Point p1(bb.x, bb.y + bb.height - altura);
+        Point p2(bb.x + bb.width, bb.y + bb.height - altura);
+        line(img2, p1, p2, Scalar(0,0,0), 2);
+
+        vector< vector<Point> > divididos;
+        findContours(img2, divididos, CV_RETR_EXTERNAL, CV_CHAIN_APPROX_NONE);
+
+        for (int k = 0; k < (int) divididos.size(); k++) {
+          contornos.push_back(divididos[k]);
+        }
+      }
+      else {
         contornos.push_back(_contornos[i]);
       }
     }
@@ -172,12 +238,12 @@ int  main()
       for (int i = 0; i < (int)contornos.size(); i++) {
 
         Rect bb = boundingRect(contornos[i]);
-        Point canto(bb.x, bb.y);
+        Point centro(bb.x + (bb.width / 2), bb.y + (bb.height / 2));
 
-        float res = euclideanDist(canto, objetos[w].canto);
+        float res = euclideanDist(centro, objetos[w].centro);
 
         // caso trivial
-        if (res < 15 && res < menor_distancia) {
+        if (res < 20 && res < menor_distancia) {
           menor_distancia = res;
           menor_indice = i;
           achou = true;
@@ -187,100 +253,11 @@ int  main()
       if (achou) {
         Rect _b = boundingRect(contornos[menor_indice]);
 
-        bool alturaRadical = abs(objetos[w].bb.height - _b.height) > 30;
-        bool larguraRadical = abs(objetos[w].bb.width - _b.width) > 30;
-
-        int caso = 1;
-
-        // if (larguraRadical)
-        // {
-        //   caso = 2;
-        // }
-
-        switch (caso) {
-          case 1:
-            objetos[w].contorno = contornos[menor_indice];
-            objetos[w].bb = boundingRect(contornos[menor_indice]);
-            objetos[w].canto = Point(objetos[w].bb.x, objetos[w].bb.y);
-            contorno_utilizado[menor_indice] = true;
-            novos_objetos.push_back(objetos[w]);
-
-            break;
-          case 2:
-            // split motherfucker
-
-            contorno_utilizado[menor_indice] = true;
-            cout << "PQP!" << endl;
-            Rect bb = boundingRect(contornos[menor_indice]);
-            Mat img2 = binaryImg.clone();
-            img2 = Scalar(0,0,0);
-            drawContours(img2, vector<vector<Point> >(1,contornos[menor_indice]), -1, Scalar(255,255,255), -1, 8);
-            Point p1(bb.x + (bb.width / 2), bb.y);
-            Point p2(bb.x + (bb.width / 2), bb.y + bb.height);
-            line(img2, p1, p2, Scalar(0,0,0), 2);
-
-            // imshow("Video", img2);
-            // waitKey(4000);
-
-            vector< vector<Point> > divididos;
-            findContours(img2, divididos, CV_RETR_EXTERNAL, CV_CHAIN_APPROX_NONE);
-
-            double min = std::numeric_limits<double>::max();
-            int min_idx = -1;
-
-            for (int k = 0; k < (int) divididos.size(); k++) {
-              Rect bb2 = boundingRect(divididos[k]);
-              Point canto(bb.x + bb2.x, bb.y + bb2.y);
-
-              float res = euclideanDist(canto, objetos[w].canto);
-
-              if (res < min) {
-                min = res;
-                min_idx = k;
-              }
-            }
-
-            if (min_idx > -1) {
-              objetos[w].contorno = divididos[min_idx];
-              objetos[w].bb = boundingRect(divididos[min_idx]);
-              objetos[w].canto = Point(objetos[w].bb.x, objetos[w].bb.y);
-              novos_objetos.push_back(objetos[w]);
-
-              cout << "TOMA NO CU" << endl;
-              pausado = true;
-
-              for (int k = 0; k < (int) divididos.size(); k++) {
-                if (k != min_idx) {
-
-                  double obj_dist = std::numeric_limits<double>::max();
-                  int bejetinho_idx = -1;
-
-                  for (int u = 0; u < (int) objetos.size(); u++) {
-                    Rect bt = boundingRect(divididos[k]);
-                    Point canto = Point(bt.x, bt.y);
-
-                    float res = euclideanDist(canto, objetos[u].canto);
-
-                    if (res < 15 && res < obj_dist) {
-                      obj_dist = res;
-                      bejetinho_idx = u;
-                    }
-                  }
-
-                  if (bejetinho_idx > -1) {
-                    objetos[bejetinho_idx].contorno = divididos[k];
-                    objetos[bejetinho_idx].bb = boundingRect(divididos[k]);
-                    objetos[bejetinho_idx].canto = Point(objetos[bejetinho_idx].bb.x, objetos[bejetinho_idx].bb.y);
-                    novos_objetos.push_back(objetos[bejetinho_idx]);
-                  } else {
-                    contornos.push_back(divididos[k]);
-                  }
-                }
-              }
-            }
-
-            break;
-        }
+        objetos[w].contorno = contornos[menor_indice];
+        objetos[w].bb = boundingRect(contornos[menor_indice]);
+        objetos[w].centro = Point(objetos[w].bb.x + (objetos[w].bb.width / 2), objetos[w].bb.y + (objetos[w].bb.height / 2));
+        contorno_utilizado[menor_indice] = true;
+        novos_objetos.push_back(objetos[w]);
       }
       else if(menor_indice > -1)
         contorno_utilizado[menor_indice] = false;
@@ -295,7 +272,7 @@ int  main()
       Rect rect1  = boundingRect(contornos[i]);
 
 
-      if ( rect1.height < 20  ||  rect1.width > 150   )
+      if ( rect1.width < 8 || rect1.height < 20  ||  rect1.width > 150   )
       {
         continue;
       }
@@ -308,10 +285,10 @@ int  main()
         continue;
       }
 
-      Point canto(rect1.x, rect1.y);
+      Point centro(rect1.x + (rect1.width / 2), rect1.y + (rect1.height / 2));
 
       Objeto novo;
-      novo.canto = canto;
+      novo.centro = centro;
       novo.contorno = contornos[i];
       novo.cor = Scalar(randomiza(120, 200), randomiza(120,200), randomiza(120,200));
 
