@@ -18,15 +18,16 @@
 using namespace cv;
 using namespace std;
 
+// Classe usada tracking dos objetos
 class Objeto {
 public:
   Point centro;
   vector<Point> contorno;
-  Rect bb;
+  Rect bb; // bounding box, ou retangulo ao redor do contorno
   Scalar cor;
 };
 
-float euclideanDist(Point& p, Point& q) {
+float distanciaEuclidiana(Point& p, Point& q) {
     Point diff = p - q;
     return cv::sqrt(diff.x*diff.x + diff.y*diff.y);
 }
@@ -35,8 +36,6 @@ int randomiza(int min,int max) { random_device rd; mt19937_64 gen(rd()); uniform
 
 int  main()
 {
-    int cont_cor = 0;
-	int c;
 	VideoCapture cap("TownCentreXVID720x480.mpg");//lê video
 
 	if (!cap.isOpened())
@@ -45,57 +44,49 @@ int  main()
 		return 0;
 	}
 
-    // MultiTracker tracker("TLD");
+	Mat quadro;
 
-	/**
-	 * Corta a parte superior do quadro, para
-	 * eliminar a parte da informação de tempo
-	 * da câmera
-	 */
-	Mat media_corrida, quadro, temp;
-	Rect ROI(0,10, 384, 278);
-	cap >> quadro;
+  // elemento estruturante com a matriz de 3X7
+  // usado para dilate, erode e open
+  Mat elemento = getStructuringElement(MORPH_RECT, Size(3, 7), Point(1,3) );
 
-	media_corrida = Mat::zeros(quadro.size(), CV_32FC3);  // preenche com 0 (zero) a imagem do acumulador
+  /**
+   * Percorre todo o video, para
+   * encontrar um background melhor
+   */
+  cout << "Processando vídeo." << endl;
 
-    // accumulateWeighted(quadro, media_corrida, 1);//pega imagem de fundo e aplica como acumulado
+  // Usa subtração de background por Misturas de Gauss
+  Ptr< BackgroundSubtractorMOG2> mog2 = createBackgroundSubtractorMOG2(500,60,true);
+  Mat mascara_background;
 
-    //elemento estruturante com a matriz de 3X7
-    Mat elemento = getStructuringElement(MORPH_RECT, Size(3, 7));
+  mog2->setBackgroundRatio(0.001);
 
-    /**
-     * Percorre todo o video, para
-     * encontrar um background melhor
-     */
-    cout << "Processando vídeo." << endl;
-    Ptr< BackgroundSubtractorMOG2> pMOG2 = createBackgroundSubtractorMOG2(500,60,true);
-    Mat fgMaskMOG2;
+  while(1)
+  {
+    cap >> quadro;
+    if ( quadro.empty() ) break;
 
-    pMOG2->setBackgroundRatio(0.001);
-    Mat element = getStructuringElement(MORPH_RECT, Size(3, 7), Point(1,3) );
+    mog2->apply(quadro, mascara_background);//,-0.5);
+  }
 
-    while(1)
-    {
-      cap >> quadro;
-      if ( quadro.empty() ) break;
+  cout << "Iniciando reconhecimento de pessoas." << endl;
 
-      pMOG2->apply(quadro, fgMaskMOG2);//,-0.5);
-    }
-    cout << "Iniciando reconhecimento de pessoas." << endl;
+  namedWindow("Video",0);//abre uma janela com o nome "Video"
+  // namedWindow("Bin",0);//abre uma janela com o nome "Video"
+  // namedWindow("BinOrig",0);//abre uma janela com o nome "Video"
+  // namedWindow("BG",0);//abre uma janela com o nome "Video"
+  // namedWindow("Diferenca",0);
 
-    namedWindow("Video",0);//abre uma janela com o nome "Video"
-    // namedWindow("Bin",0);//abre uma janela com o nome "Video"
-    // namedWindow("BinOrig",0);//abre uma janela com o nome "Video"
-    // namedWindow("BG",0);//abre uma janela com o nome "Video"
-    // namedWindow("Diferenca",0);
+  cap.release();//fecha video
 
-    cap.release();//fecha video
+  // diminui o aprendizado de background
+  mog2->setBackgroundRatio(0.0001);
 
-    VideoCapture cap2("TownCentreXVID720x480.mpg");//lê video novamente
+  VideoCapture cap2("TownCentreXVID720x480.mpg");//lê video novamente
 
+  // inicia lista de objetos do nosso tracker de objetos
   vector<Objeto> objetos;
-
-  bool pausado = false;
 
 	while(1)
 	{
@@ -104,37 +95,54 @@ int  main()
 
     Mat originalFrame = quadro.clone();
 
-    pMOG2->apply(quadro, fgMaskMOG2);//,-0.5);
     Mat binaryImg;
-    morphologyEx(fgMaskMOG2, binaryImg, CV_MOP_CLOSE, element);
+    // passa mascara do MOG2 para imagem binaria
+    // já realizando um close para reduzir ruidos
+    morphologyEx(mascara_background, binaryImg, CV_MOP_CLOSE, elemento);
+
+    // remove sombras
     threshold(binaryImg, binaryImg, 128, 255, CV_THRESH_BINARY);
     Mat binOrig = binaryImg.clone();
 
+    // Aplica quadro atual ao subtrator de background
+    mog2->apply(quadro, mascara_background);
+
+    // Separa um pouco os objetos
     for (int i = 0; i < 2; i++)
-      morphologyEx(binaryImg, binaryImg, CV_MOP_OPEN, element);
+      morphologyEx(binaryImg, binaryImg, CV_MOP_OPEN, elemento);
 
+    // Faz pessoas/objetos virarem bolhas
     for (int i = 0; i < 5; i++)
-      morphologyEx(binaryImg, binaryImg, CV_MOP_DILATE, element);
+      morphologyEx(binaryImg, binaryImg, CV_MOP_DILATE, elemento);
 
+    // Diminui um pouco
     for (int i = 0; i < 3; i++)
-      morphologyEx(binaryImg, binaryImg, CV_MOP_ERODE, element);
+      morphologyEx(binaryImg, binaryImg, CV_MOP_ERODE, elemento);
 
+    // Se pessoas se juntarem por poucos pixels
+    // aqui separamos elas
     for (int i = 0; i < 20; i++)
-      morphologyEx(binaryImg, binaryImg, CV_MOP_OPEN, element);
+      morphologyEx(binaryImg, binaryImg, CV_MOP_OPEN, elemento);
 
+    // Embaça imagem binária
     blur(binaryImg, binaryImg, Size(10,10) );
-    Mat ContourImg = binaryImg.clone();
 
+    // clona imagem binaria porque
+    // a findContours "estraga" a imagem
+    Mat ContourImg = binaryImg.clone();
 
     vector< vector<Point> > _contornos;
     vector< vector<Point> > contornos;
     findContours(ContourImg, _contornos, CV_RETR_EXTERNAL, CV_CHAIN_APPROX_NONE);
 
+    // Armazena os terços da largura e altura do frame atual
     double hframe = binaryImg.size().height / 3.0f;
     double wframe = binaryImg.size().width / 3.0f;
 
-    // corte de contornos por largura
-    // meio que corrigindo perspectiva
+    // Realiza cortes de contornos por largura
+    // dividindo a imagem em 9 quadrantes
+    //
+    // "corrige perspectiva"
     for (int i = 0; i < (int) _contornos.size(); i++) {
       Rect bb = boundingRect(_contornos[i]);
       Point centro(bb.x + (bb.width / 2), bb.y + (bb.height / 2));
@@ -175,6 +183,11 @@ int  main()
         }
       }
 
+      // Se contorno for maior que largura de corte E
+      // essa largura for o dobro pelo menos, então corta
+      //
+      // corte é feito desenhando uma linha vertical preta e chamando
+      // a findContours novamente
       if (bb.width > largura && (bb.width - largura) > (largura / 2.0f)) {
         Mat img2 = binaryImg.clone();
         img2 = Scalar(0,0,0);
@@ -194,11 +207,12 @@ int  main()
       }
     }
 
+    // transforma contornos numa variavel temporaria
+    // de novo, pois vamos cortar por altura
     _contornos = contornos;
     contornos.clear();
 
     // corte de contornos por altura
-    // meio que corrigindo perspectiva
     for (int i = 0; i < (int) _contornos.size(); i++) {
       Rect bb = boundingRect(_contornos[i]);
       Point centro(bb.x + (bb.width / 2), bb.y + (bb.height / 2));
@@ -225,11 +239,17 @@ int  main()
       }
     }
 
-
-    vector<int> lixo;
+    // para vermos quais são novos
     vector<bool> contorno_utilizado = vector<bool> ((int) contornos.size(), false);
+
+    // objetos que detectarem o seu respectivo contorno no frame atual
+    // visto que se não encontrar, não entra nesse frame, assim
+    // limpando objetos ao sair do video
     vector <Objeto> novos_objetos;
 
+    // percorre cada objeto, tentando encontrar
+    // um contorno que estiver mais perto do
+    // contorno no frame anterior
     for (int w = 0; w < (int)objetos.size(); w++) {
       int menor_indice = -1;
       double menor_distancia = std::numeric_limits<double>::max();
@@ -240,9 +260,8 @@ int  main()
         Rect bb = boundingRect(contornos[i]);
         Point centro(bb.x + (bb.width / 2), bb.y + (bb.height / 2));
 
-        float res = euclideanDist(centro, objetos[w].centro);
+        float res = distanciaEuclidiana(centro, objetos[w].centro);
 
-        // caso trivial
         if (res < 20 && res < menor_distancia) {
           menor_distancia = res;
           menor_indice = i;
@@ -264,13 +283,12 @@ int  main()
     }
 
     for (int i = 0; i < (int) contornos.size(); i++) {
-
+      // se um objeto detectou este contorno, ignora
       if (contorno_utilizado[i]) {
         continue;
       }
 
       Rect rect1  = boundingRect(contornos[i]);
-
 
       if ( rect1.width < 8 || rect1.height < 20  ||  rect1.width > 150   )
       {
@@ -298,6 +316,7 @@ int  main()
 
     objetos = novos_objetos;
 
+    // desenha objetos na imagem final
     for (Objeto o : objetos) {
       vector<Point> tmp = o.contorno;
       const Point* pts[1] = { &tmp[0] };
@@ -318,11 +337,6 @@ int  main()
     {
     	break;
     }
-
-    // if (pausado) {
-    //   waitKey(7000);
-    //   pausado = false;
-    // }
 	}
 
 	return 0;
